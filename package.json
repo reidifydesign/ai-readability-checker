@@ -1,0 +1,33 @@
+{
+  "name": "ai-readability-checker",
+  "version": "1.0.0",
+  "description": "Reads the raw HTML of any URL and reports what AI crawlers and answer engines can actually parse.",
+  "type": "module",
+  "main": "src/check.js",
+  "exports": {
+    ".": "./src/check.js"
+  },
+  "files": ["src", "README.md", "LICENSE"],
+  "scripts": {
+    "example": "node example.js"
+  },
+  "keywords": [
+    "seo",
+    "aeo",
+    "geo",
+    "ai-crawlers",
+    "structured-data",
+    "gptbot",
+    "claudebot",
+    "answer-engine-optimization"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reidifydesign/ai-readability-checker.git"
+  },
+  "homepage": "https://reidify.design/ai-readability-checker",
+  "engines": {
+    "node": ">=18"
+  }
+}
