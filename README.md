@@ -18,6 +18,27 @@ Google's own documentation says the same thing from the other side:
 
 So if your meaning only exists after hydration, a large part of your machine audience never receives it. This tool shows you that gap.
 
+## The check this tool most needed, added 22 Aug 2026
+
+For about four months, all 123 pages of reidify.design served their entire contents inside a hidden `div`, after the footer, with nothing able to reveal it.
+
+One Suspense boundary above the route tree made React take its streaming path during prerender: fallback inside `main`, real page in a hidden `div`, then a small inline script to move the content into place. The Content Security Policy is `script-src self` plus hashes, so that inline script never survived into the built file.
+
+A build check had been running the whole time. It counted characters inside the root element and passed happily, because **hidden characters are still characters**.
+
+This tool had the same blind spot until now. It counted words in stripped HTML, which counts hidden words too. It now finds text that is present but never rendered, subtracts it before counting, and reports both numbers. On the failure above it reports 500 words hidden and 1 word visible, which is what the machine actually saw.
+
+Detection is depth-tracked rather than regex-matched, because a non-greedy regex closes on the first nested `</div>` and reports a fraction of the real blob.
+
+## Command line
+
+```bash
+npx ai-readability-checker example.com
+npx ai-readability-checker https://example.com --json
+```
+
+Exits `1` if any check fails. Warnings do not fail the run, because a warning is a judgement call and a build should not break on one.
+
 ## What it checks
 
 **On the page**
@@ -25,7 +46,8 @@ So if your meaning only exists after hydration, a large part of your machine aud
 - `h1` presence and count
 - Heading tree, including skipped levels
 - JSON-LD structured data, and whether any of it names the entity
-- How much text survives before any JavaScript runs
+- **Text hidden from rendering**, inside `hidden`, `display:none` or `<template>`
+- How much text survives before any JavaScript runs, with hidden content subtracted first
 - Image `alt` coverage
 - Canonical URL
 - Open Graph tags

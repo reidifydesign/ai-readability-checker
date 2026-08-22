@@ -30,7 +30,7 @@ const rateLimited = (ip) => {
   return rec.count > RATE_LIMIT;
 };
 
-const normalizeUrl = (raw) => {
+export const normalizeUrl = (raw) => {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim().slice(0, 500);
   if (!trimmed) return null;
@@ -62,7 +62,7 @@ const normalizeUrl = (raw) => {
   return u;
 };
 
-const fetchText = async (url, { asText = true } = {}) => {
+export const fetchText = async (url, { asText = true } = {}) => {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
@@ -101,7 +101,62 @@ const attr = (tag, name) => {
   return m ? m[1] : null;
 };
 
-const analyseHtml = (html, pageUrl) => {
+/**
+ * Find text that is present in the HTML but hidden from rendering.
+ *
+ * THIS IS THE CHECK THE TOOL MOST NEEDED AND DID NOT HAVE. Counting words in
+ * stripped HTML happily counts words inside a hidden div, so a page whose whole
+ * body ships hidden scores a healthy word count while a machine reading
+ * document structure sees a placeholder. That is not hypothetical: it is how
+ * 123 pages of reidify.design failed silently for four months behind a build
+ * check that counted characters. Hidden characters are still characters.
+ *
+ * Depth-tracked rather than regex-matched, because a non-greedy regex closes on
+ * the first nested closing tag and reports a fraction of the real blob.
+ *
+ * Catches the hidden attribute, inline display:none / visibility:hidden, and
+ * template elements, whose contents never render at all.
+ */
+const HIDDEN_TAG = /<(div|section|main|article|span|template)\b([^>]*)>/gi;
+
+const extractHidden = (html) => {
+  const chunks = [];
+  let m;
+  HIDDEN_TAG.lastIndex = 0;
+  while ((m = HIDDEN_TAG.exec(html))) {
+    const [full, tag, attrs] = m;
+    const isHidden =
+      tag.toLowerCase() === "template" ||
+      /\shidden(\s|=|$)/i.test(attrs) ||
+      /style\s*=\s*["'][^"']*(display\s*:\s*none|visibility\s*:\s*hidden)/i.test(attrs);
+    if (!isHidden || full.endsWith("/>")) continue;
+
+    const open = new RegExp("<" + tag + "\\b[^>]*>", "gi");
+    const close = new RegExp("</" + tag + "\\s*>", "gi");
+    let depth = 1;
+    let cursor = m.index + full.length;
+    const start = cursor;
+    while (depth > 0 && cursor < html.length) {
+      open.lastIndex = cursor;
+      close.lastIndex = cursor;
+      const o = open.exec(html);
+      const c = close.exec(html);
+      if (!c) break;
+      if (o && o.index < c.index) {
+        depth += 1;
+        cursor = o.index + o[0].length;
+      } else {
+        depth -= 1;
+        cursor = c.index + c[0].length;
+        if (depth === 0) chunks.push(html.slice(start, c.index));
+      }
+    }
+    HIDDEN_TAG.lastIndex = cursor;
+  }
+  return chunks;
+};
+
+export const analyseHtml = (html, pageUrl) => {
   const findings = [];
   const add = (id, label, status, detail) => findings.push({ id, label, status, detail });
 
@@ -193,8 +248,28 @@ const analyseHtml = (html, pageUrl) => {
 
   // --- Text without JavaScript ---
   const bodyMatch = html.match(/<body\b[^>]*>([\s\S]*)<\/body>/i);
-  const visibleText = stripTags(bodyMatch ? bodyMatch[1] : html);
+  const bodyHtml = bodyMatch ? bodyMatch[1] : html;
+
+  // Subtract hidden content BEFORE counting, or a page whose whole body ships
+  // inside a hidden div reports a healthy word count while a machine sees a
+  // placeholder.
+  const hiddenChunks = extractHidden(bodyHtml);
+  const hiddenWords = hiddenChunks
+    .map((c) => stripTags(c))
+    .filter(Boolean)
+    .reduce((n, t) => n + t.split(/\s+/).length, 0);
+
+  let renderedHtml = bodyHtml;
+  for (const c of hiddenChunks) renderedHtml = renderedHtml.replace(c, " ");
+  const visibleText = stripTags(renderedHtml);
   const words = visibleText ? visibleText.split(/\s+/).length : 0;
+
+  if (hiddenWords >= 100) {
+    add("hidden", "Hidden content", "fail", `${hiddenWords} words sit inside hidden elements and never render. That text is in the file, so byte-counting checks pass, but a machine reading document structure does not see it. If this page prerenders, check whether the reveal script survived your Content Security Policy.`);
+  } else if (hiddenWords > 0) {
+    add("hidden", "Hidden content", "info", `${hiddenWords} words inside hidden elements. Small enough to be intentional, such as a skip link or an icon label.`);
+  }
+
   if (words < 50) {
     add("text", "Text without JavaScript", "fail", `Only ${words} words survive in the raw HTML. Crawlers that do not execute JavaScript see almost nothing of this page.`);
   } else if (words < 250) {
@@ -242,7 +317,7 @@ const analyseHtml = (html, pageUrl) => {
   return { findings, meta: { title, url: pageUrl } };
 };
 
-const analyseSiteFiles = async (origin) => {
+export const analyseSiteFiles = async (origin) => {
   const findings = [];
   const add = (id, label, status, detail) => findings.push({ id, label, status, detail });
 
@@ -366,4 +441,17 @@ export default async (req, context) => {
     }),
     { status: 200, headers: { "Content-Type": "application/json" } }
   );
+};
+
+/** Run every check against one URL. Used by bin/cli.js and by library consumers. */
+export const check = async (rawUrl) => {
+  const url = normalizeUrl(rawUrl);
+  if (!url) throw new Error(`Not a usable public URL: ${rawUrl}`);
+  const page = await fetchText(url.href);
+  if (!page.ok || !page.body) {
+    throw new Error(`Could not fetch ${url.href} (HTTP ${page.status || "no response"})`);
+  }
+  const { findings, meta } = analyseHtml(page.body, url.href);
+  const site = await analyseSiteFiles(url.origin);
+  return { url: url.href, meta, findings: [...findings, ...site] };
 };

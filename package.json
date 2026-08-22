@@ -1,13 +1,18 @@
 {
   "name": "ai-readability-checker",
   "version": "1.0.0",
-  "description": "Reads the raw HTML of any URL and reports what AI crawlers and answer engines can actually parse.",
+  "description": "Reads the raw HTML of any URL and reports what AI crawlers and answer engines can actually parse, including text hidden from rendering.",
   "type": "module",
   "main": "src/check.js",
   "exports": {
     ".": "./src/check.js"
   },
-  "files": ["src", "README.md", "LICENSE"],
+  "files": [
+    "src",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "example": "node example.js"
   },
@@ -29,5 +34,8 @@
   "homepage": "https://reidify.design/ai-readability-checker",
   "engines": {
     "node": ">=18"
+  },
+  "bin": {
+    "ai-readability-checker": "bin/cli.js"
   }
 }
