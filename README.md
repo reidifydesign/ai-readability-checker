@@ -1,6 +1,16 @@
 # AI Readability Checker
 
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![Node 18+](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](package.json)
+[![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](package.json)
+
 Reads the **raw HTML** of any public URL, the version a crawler sees before JavaScript runs, and reports what a machine can and cannot understand about the page.
+
+```bash
+npx github:reidifydesign/ai-readability-checker example.com
+```
+
+![The checker run against example.com: five failures, five warnings, two passes, each with the reason it matters to a machine reader](media/cli-example.png)
 
 Not a score out of 100. Every finding names what was found and why it matters to a machine reader, and nothing is inferred beyond the bytes.
 
@@ -33,8 +43,8 @@ Detection is depth-tracked rather than regex-matched, because a non-greedy regex
 ## Command line
 
 ```bash
-npx ai-readability-checker example.com
-npx ai-readability-checker https://example.com --json
+npx github:reidifydesign/ai-readability-checker example.com
+npx github:reidifydesign/ai-readability-checker https://example.com --json
 ```
 
 Exits `1` if any check fails. Warnings do not fail the run, because a warning is a judgement call and a build should not break on one.
@@ -122,4 +132,4 @@ This fetches arbitrary user-supplied URLs, so it is built defensively:
 
 ## Licence
 
-MIT. Built at [Reidify](https://reidify.design), an AI-first design and systems studio in Mumbai.
+MIT. Built by [@rishsadh](https://github.com/rishsadh) at [Reidify](https://reidify.design), an AI-first design and systems studio in Mumbai.
